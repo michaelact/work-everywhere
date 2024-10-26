@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Trash2, Edit, Plus } from 'lucide-react'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
+import ProjectProgressChart from '@/components/ProjectProgressChart'
 
 interface Task {
   id: number
@@ -202,7 +203,9 @@ export default function ProjectDashboard() {
         </div>
       </div>
 
-      <h2 className="text-2xl font-semibold mb-4">Tasks</h2>
+      <ProjectProgressChart projectId={parseInt(projectId as string)} />
+
+      <h2 className="text-2xl font-semibold mb-4 mt-8">Tasks</h2>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         {['todo', 'in progress', 'completed'].map((status) => (
           <div key={status} className="bg-gray-100 p-4 rounded-lg">

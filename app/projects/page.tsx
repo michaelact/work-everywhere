@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from '@/components/ui/input'
 import { Plus, Search } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
+import ProjectSearch from '@/components/ProjectSearch'
 
 interface Project {
   id: number
@@ -19,10 +20,11 @@ interface Project {
 
 export default function ProjectListPage() {
   const [projects, setProjects] = useState<Project[]>([])
+  const [filteredProjects, setFilteredProjects] = useState<Project[]>([])
   const [newProjectName, setNewProjectName] = useState('')
-  const [newProjectDescription, setNewProjectDescription] = useState('') // New state for description
-  const [newProjectDueDate, setNewProjectDueDate] = useState('') // New state for due date
-  const [newProjectPriority, setNewProjectPriority] = useState('Medium') // New state for priority
+  const [newProjectDescription, setNewProjectDescription] = useState('')
+  const [newProjectDueDate, setNewProjectDueDate] = useState('')
+  const [newProjectPriority, setNewProjectPriority] = useState('Medium')
   const [searchQuery, setSearchQuery] = useState('')
   const router = useRouter()
 
@@ -38,6 +40,7 @@ export default function ProjectListPage() {
       if (response.ok) {
         const data = await response.json()
         setProjects(data)
+        setFilteredProjects(data)
       } else {
         console.error('Failed to fetch projects')
       }
@@ -76,23 +79,19 @@ export default function ProjectListPage() {
     }
   }
 
-  const filteredProjects = projects.filter(project =>
-    project.name.toLowerCase().includes(searchQuery.toLowerCase())
-  )
+  const handleSearch = (query: string) => {
+    const filtered = projects.filter(project =>
+      project.name.toLowerCase().includes(query.toLowerCase()) ||
+      project.description.toLowerCase().includes(query.toLowerCase())
+    )
+    setFilteredProjects(filtered)
+  }
 
   return (
     <div className="container mx-auto p-8">
-      <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold">Projects</h1>
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-          <Input
-            className="pl-10 pr-4 py-2 w-64"
-            placeholder="Search projects..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-        </div>
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold">Projects</h1>
+        <ProjectSearch onSearch={handleSearch} />
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredProjects.map((project) => (
