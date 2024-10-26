@@ -5,17 +5,16 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { Plus, Search } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
+import { Plus, Search, Calendar, Users } from 'lucide-react'
 import ProjectSearch from '@/components/ProjectSearch'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { Label } from '@/components/ui/label'
 
 interface Project {
   id: number
   name: string
   description: string
   due_date: string
-  priority: 'Low' | 'Medium' | 'High'
-  tags: string[]
 }
 
 export default function ProjectListPage() {
@@ -24,8 +23,6 @@ export default function ProjectListPage() {
   const [newProjectName, setNewProjectName] = useState('')
   const [newProjectDescription, setNewProjectDescription] = useState('')
   const [newProjectDueDate, setNewProjectDueDate] = useState('')
-  const [newProjectPriority, setNewProjectPriority] = useState('Medium')
-  const [searchQuery, setSearchQuery] = useState('')
   const router = useRouter()
 
   useEffect(() => {
@@ -35,7 +32,7 @@ export default function ProjectListPage() {
   const fetchProjects = async () => {
     try {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/projects`, {
-        credentials: 'include'
+        credentials: 'include',
       })
       if (response.ok) {
         const data = await response.json()
@@ -58,18 +55,12 @@ export default function ProjectListPage() {
           'Content-Type': 'application/json',
         },
         credentials: 'include',
-        body: JSON.stringify({
-          name: newProjectName,
-          description: newProjectDescription,
-          due_date: newProjectDueDate,
-          priority: newProjectPriority,
-        }),
+        body: JSON.stringify({ name: newProjectName, description: newProjectDescription, due_date: newProjectDueDate }),
       })
       if (response.ok) {
         setNewProjectName('')
         setNewProjectDescription('')
         setNewProjectDueDate('')
-        setNewProjectPriority('Medium')
         fetchProjects()
       } else {
         console.error('Failed to create project')
@@ -88,77 +79,82 @@ export default function ProjectListPage() {
   }
 
   return (
-    <div className="container mx-auto p-8">
+    <div className="container mx-auto p-4">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Projects</h1>
-        <ProjectSearch onSearch={handleSearch} />
+        <h1 className="text-2xl font-bold text-orange-500">Projects</h1>
+        <div className="flex items-center space-x-2">
+          <ProjectSearch onSearch={handleSearch} />
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button className="bg-orange-500 hover:bg-orange-600">
+                <Plus className="mr-2 h-4 w-4" /> New Project
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <form onSubmit={handleCreateProject}>
+                <DialogHeader>
+                  <DialogTitle>Create New Project</DialogTitle>
+                  <DialogDescription>Add a new project to your dashboard.</DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="name" className="text-right">
+                      Name
+                    </Label>
+                    <Input
+                      id="name"
+                      value={newProjectName}
+                      onChange={(e) => setNewProjectName(e.target.value)}
+                      className="col-span-3"
+                    />
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="description" className="text-right">
+                      Description
+                    </Label>
+                    <Input
+                      id="description"
+                      value={newProjectDescription}
+                      onChange={(e) => setNewProjectDescription(e.target.value)}
+                      className="col-span-3"
+                    />
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="due_date" className="text-right">
+                      Due Date
+                    </Label>
+                    <Input
+                      id="due_date"
+                      type="date"
+                      value={newProjectDueDate}
+                      onChange={(e) => setNewProjectDueDate(e.target.value)}
+                      className="col-span-3"
+                    />
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button type="submit">Create Project</Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filteredProjects.map((project) => (
           <Card key={project.id} className="cursor-pointer hover:shadow-lg transition-shadow duration-200" onClick={() => router.push(`/projects/${project.id}`)}>
             <CardHeader>
-              <CardTitle className="flex justify-between items-center">
-                <span>{project.name}</span>
-                <Badge variant={project.priority === 'High' ? 'destructive' : project.priority === 'Medium' ? 'default' : 'secondary'}>
-                  {project.priority}
-                </Badge>
-              </CardTitle>
+              <CardTitle className="text-lg font-semibold text-orange-500">{project.name}</CardTitle>
               <CardDescription>{project.description}</CardDescription>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-gray-500">Due: {new Date(project.due_date).toLocaleDateString()}</p>
-              <div className="flex flex-wrap gap-2 mt-2">
-                {(project.tags || []).map((tag, index) => (
-                  <Badge key={index} variant="outline">{tag}</Badge>
-                ))}
+              <div className="flex items-center space-x-2 text-sm text-gray-500 mb-2">
+                <Calendar className="h-4 w-4" />
+                <span>Due: {new Date(project.due_date).toLocaleDateString()}</span>
               </div>
             </CardContent>
           </Card>
         ))}
-        <Card>
-          <CardHeader>
-            <CardTitle>Create New Project</CardTitle>
-          </CardHeader>
-          <form onSubmit={handleCreateProject}>
-            <CardContent>
-              <Input
-                placeholder="Project Name"
-                value={newProjectName}
-                onChange={(e) => setNewProjectName(e.target.value)}
-                required
-              />
-              <Input
-                placeholder="Description"
-                value={newProjectDescription}
-                onChange={(e) => setNewProjectDescription(e.target.value)}
-                className="mt-2"
-                required
-              />
-              <Input
-                type="date"
-                placeholder="Due Date"
-                value={newProjectDueDate}
-                onChange={(e) => setNewProjectDueDate(e.target.value)}
-                className="mt-2"
-                required
-              />
-              <select
-                value={newProjectPriority}
-                onChange={(e) => setNewProjectPriority(e.target.value as 'Low' | 'Medium' | 'High')}
-                className="mt-2 w-full p-2 border rounded"
-              >
-                <option value="Low">Low</option>
-                <option value="Medium">Medium</option>
-                <option value="High">High</option>
-              </select>
-            </CardContent>
-            <CardFooter>
-              <Button type="submit" className="w-full">
-                <Plus className="mr-2 h-4 w-4" /> Create Project
-              </Button>
-            </CardFooter>
-          </form>
-        </Card>
       </div>
     </div>
   )

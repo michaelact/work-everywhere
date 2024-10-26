@@ -1,23 +1,26 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams } from 'next/navigation'
+import { DragDropContext, Droppable, Draggable, DropResult } from 'react-beautiful-dnd'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Trash2, Edit, Plus } from 'lucide-react'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
-import ProjectProgressChart from '@/components/ProjectProgressChart'
+import { Textarea } from '@/components/ui/textarea'
+import { Search, Plus, ChevronDown, Filter, SortAsc, Calendar, Users, Edit } from 'lucide-react'
+import { useToast } from '@/hooks/use-toast'
 
 interface Task {
   id: number
   title: string
   description: string
   status: string
-  priority: number
+  priority: '3' | '2' | '1'
   due_date: string
 }
 
@@ -27,19 +30,29 @@ interface Project {
   description: string
   due_date: string
   tasks: Task[]
+  members: { id: number; name: string; avatar: string }[]
 }
 
+const statusColumns = ['Todo', 'In Progress', 'Completed', 'Overdue']
+
 export default function ProjectDashboard() {
-    const { projectId } = useParams()
-    const router = useRouter()
-    const [project, setProject] = useState<Project | null>(null)
-    const [newTask, setNewTask] = useState({ title: '', description: '', status: 'todo', priority: 1, due_date: '' })
-    const [editingTask, setEditingTask] = useState<Task | null>(null)
-    const [isEditingProject, setIsEditingProject] = useState(false)
-  
-    useEffect(() => {
-      fetchProject()
-    }, [projectId])
+  const { projectId } = useParams()
+  const [project, setProject] = useState<Project | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [sortBy, setSortBy] = useState<'priority' | 'due_date'>('priority')
+  const [newTask, setNewTask] = useState<Partial<Task>>({
+    title: '',
+    description: '',
+    status: 'Todo',
+    priority: '1',
+    due_date: '',
+  })
+  const [editingTask, setEditingTask] = useState<Task | null>(null)
+  const { toast } = useToast()
+
+  useEffect(() => {
+    fetchProject()
+  }, [projectId])
 
   const fetchProject = async () => {
     try {
@@ -51,9 +64,59 @@ export default function ProjectDashboard() {
         setProject(data)
       } else {
         console.error('Failed to fetch project')
+        toast({
+          title: 'Error',
+          description: 'Failed to fetch project. Please try again.',
+          variant: 'destructive',
+        })
       }
     } catch (error) {
       console.error('Error fetching project:', error)
+      toast({
+        title: 'Error',
+        description: 'An error occurred while fetching the project. Please try again.',
+        variant: 'destructive',
+      })
+    }
+  }
+
+  const onDragEnd = async (result: DropResult) => {
+    if (!result.destination || !project) return
+
+    const { source, destination, draggableId } = result
+    const updatedTasks = Array.from(project.tasks)
+    const [movedTask] = updatedTasks.splice(source.index, 1)
+    updatedTasks.splice(destination.index, 0, { ...movedTask, status: destination.droppableId })
+
+    setProject({ ...project, tasks: updatedTasks })
+
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/tasks/${draggableId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({ status: destination.droppableId }),
+      })
+
+      if (!response.ok) {
+        console.error('Failed to update task status')
+        fetchProject() // Revert to the previous state if the update fails
+        toast({
+          title: 'Error',
+          description: 'Failed to update task status. Please try again.',
+          variant: 'destructive',
+        })
+      }
+    } catch (error) {
+      console.error('Error updating task status:', error)
+      fetchProject() // Revert to the previous state if the update fails
+      toast({
+        title: 'Error',
+        description: 'An error occurred while updating the task status. Please try again.',
+        variant: 'destructive',
+      })
     }
   }
 
@@ -69,13 +132,33 @@ export default function ProjectDashboard() {
         body: JSON.stringify(newTask),
       })
       if (response.ok) {
-        setNewTask({ title: '', description: '', status: 'todo', priority: 1, due_date: '' })
+        setNewTask({
+          title: '',
+          description: '',
+          status: 'Todo',
+          priority: '1',
+          due_date: '',
+        })
         fetchProject()
+        toast({
+          title: 'Success',
+          description: 'Task created successfully.',
+        })
       } else {
         console.error('Failed to create task')
+        toast({
+          title: 'Error',
+          description: 'Failed to create task. Please try again.',
+          variant: 'destructive',
+        })
       }
     } catch (error) {
       console.error('Error creating task:', error)
+      toast({
+        title: 'Error',
+        description: 'An error occurred while creating the task. Please try again.',
+        variant: 'destructive',
+      })
     }
   }
 
@@ -95,315 +178,345 @@ export default function ProjectDashboard() {
       if (response.ok) {
         setEditingTask(null)
         fetchProject()
+        toast({
+          title: 'Success',
+          description: 'Task updated successfully.',
+        })
       } else {
         console.error('Failed to update task')
+        toast({
+          title: 'Error',
+          description: 'Failed to update task. Please try again.',
+          variant: 'destructive',
+        })
       }
     } catch (error) {
       console.error('Error updating task:', error)
-    }
-  }
-
-  const handleDeleteTask = async (taskId: number) => {
-    try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/tasks/${taskId}`, {
-        method: 'DELETE',
-        credentials: 'include'
+      toast({
+        title: 'Error',
+        description: 'An error occurred while updating the task. Please try again.',
+        variant: 'destructive',
       })
-      if (response.ok) {
-        fetchProject()
-      } else {
-        console.error('Failed to delete task')
-      }
-    } catch (error) {
-      console.error('Error deleting task:', error)
     }
   }
 
-  const handleUpdateProject = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!project) return
+  const filteredTasks = project?.tasks.filter(task =>
+    task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    task.description.toLowerCase().includes(searchQuery.toLowerCase())
+  ) || []
 
-    try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/projects/${projectId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify(project),
-      })
-      if (response.ok) {
-        setIsEditingProject(false)
-        fetchProject()
-      } else {
-        console.error('Failed to update project')
-      }
-    } catch (error) {
-      console.error('Error updating project:', error)
+  const sortedTasks = [...filteredTasks].sort((a, b) => {
+    if (sortBy === 'priority') {
+      const priorityOrder = { 1: 3, 2: 2, 3: 1 }
+      return priorityOrder[b.priority] - priorityOrder[a.priority]
+    } else {
+      return new Date(a.due_date).getTime() - new Date(b.due_date).getTime()
     }
-  }
-
-  const handleDeleteProject = async () => {
-    try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/projects/${projectId}`, {
-        method: 'DELETE',
-        credentials: 'include',
-      })
-      if (response.ok) {
-        router.push('/projects')
-      } else {
-        console.error('Failed to delete project')
-      }
-    } catch (error) {
-      console.error('Error deleting project:', error)
-    }
-  }
+  })
 
   if (!project) {
     return <div>Loading...</div>
   }
 
   return (
-    <div className="container mx-auto p-8">
-      <div className="flex justify-between items-center mb-8">
-        {isEditingProject ? (
-          <form onSubmit={handleUpdateProject} className="flex-1 mr-4">
-            <Input
-              value={project.name}
-              onChange={(e) => setProject({ ...project, name: e.target.value })}
-              className="text-2xl font-bold mb-2"
-            />
-            <Textarea
-              value={project.description}
-              onChange={(e) => setProject({ ...project, description: e.target.value })}
-              className="mb-2"
-            />
-            <Input
-              type="date"
-              value={project.due_date}
-              onChange={(e) => setProject({ ...project, due_date: e.target.value })}
-              className="mb-2"
-            />
-            <Button type="submit">Save Project</Button>
-          </form>
-        ) : (
+    <div className="container mx-auto p-4">
+      <header className="bg-orange-500 text-white p-4 rounded-t-lg mb-4">
+        <div className="flex justify-between items-center">
           <div>
-            <h1 className="text-3xl font-bold mb-2">{project.name}</h1>
-            <p className="mb-2">{project.description}</p>
-            <p className="mb-2">Due: {new Date(project.due_date).toLocaleDateString()}</p>
+            <h1 className="text-2xl font-bold">{project.name}</h1>
+            <p className="text-sm">Due: {new Date(project.due_date).toLocaleDateString()}</p>
           </div>
-        )}
-        <div>
-          <Button variant="outline" className="mr-2" onClick={() => setIsEditingProject(!isEditingProject)}>
-            <Edit className="mr-2 h-4 w-4" /> Edit Project
-          </Button>
-          <Button variant="destructive" onClick={handleDeleteProject}>
-            <Trash2 className="mr-2 h-4 w-4" /> Delete Project
-          </Button>
+          <div className="flex items-center space-x-2">
+            <Select>
+              <SelectTrigger className="w-[180px] bg-white text-orange-500">
+                <SelectValue placeholder="Select Project" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="current">{project.name}</SelectItem>
+                {/* Add more projects here */}
+              </SelectContent>
+            </Select>
+            <Button variant="outline" className="bg-white text-orange-500">
+              <ChevronDown className="h-4 w-4 mr-2" />
+              My Project
+            </Button>
+          </div>
+        </div>
+      </header>
+
+      <div className="bg-white p-4 rounded-lg shadow mb-4">
+        <div className="flex justify-between items-center mb-4">
+          <div className="flex items-center space-x-2">
+            <Input
+              type="text"
+              placeholder="Search tasks..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-64"
+            />
+            <Button variant="outline">
+              <Search className="h-4 w-4" />
+            </Button>
+          </div>
+          <div className="flex items-center space-x-2">
+            <Select value={sortBy} onValueChange={(value: 'priority' | 'due_date') => setSortBy(value)}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Sort by" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="priority">Sort by Priority</SelectItem>
+                <SelectItem value="due_date">Sort by Due Date</SelectItem>
+              </SelectContent>
+            </Select>
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button className="bg-orange-500 hover:bg-orange-600">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Task
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <form onSubmit={handleCreateTask}>
+                  <DialogHeader>
+                    <DialogTitle>Create New Task</DialogTitle>
+                    <DialogDescription>Add a new task to your project.</DialogDescription>
+                  </DialogHeader>
+                  <div className="grid gap-4 py-4">
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="title" className="text-right">
+                        Title
+                      </Label>
+                      <Input
+                        id="title"
+                        value={newTask.title}
+                        onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
+                        className="col-span-3"
+                      />
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="description" className="text-right">
+                        Description
+                      </Label>
+                      <Textarea
+                        id="description"
+                        value={newTask.description}
+                        onChange={(e) => setNewTask({ ...newTask, description: e.target.value })}
+                        className="col-span-3"
+                      />
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="status" className="text-right">
+                        Status
+                      </Label>
+                      <Select
+                        value={newTask.status}
+                        onValueChange={(value) => setNewTask({ ...newTask, status: value })}
+                      >
+                        <SelectTrigger className="col-span-3">
+                          <SelectValue placeholder="Select status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {statusColumns.map((status) => (
+                            <SelectItem key={status} value={status}>
+                              {status}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="priority" className="text-right">
+                        Priority
+                      </Label>
+                      <Select
+                        value={newTask.priority}
+                        onValueChange={(value: '3' | '2' | '1') => setNewTask({ ...newTask, priority: value })}
+                      >
+                        <SelectTrigger className="col-span-3">
+                          <SelectValue placeholder="Select priority" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="3">Low</SelectItem>
+                          <SelectItem value="2">Medium</SelectItem>
+                          <SelectItem value="1">High</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="due_date" className="text-right">
+                        Due Date
+                      </Label>
+                      <Input
+                        id="due_date"
+                        type="date"
+                        value={newTask.due_date}
+                        onChange={(e) => setNewTask({ ...newTask, due_date: e.target.value })}
+                        className="col-span-3"
+                      />
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button type="submit">Create Task</Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
+          </div>
+        </div>
+
+        <DragDropContext onDragEnd={onDragEnd}>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {statusColumns.map((status) => (
+              <Droppable key={status} droppableId={status}>
+                {(provided) => (
+                  <div
+                    {...provided.droppableProps}
+                    ref={provided.innerRef}
+                    className="bg-gray-100 p-4 rounded-lg"
+                  >
+                    <h3 className="text-lg font-semibold mb-2">{status}</h3>
+                    {sortedTasks
+                      .filter((task) => task.status.toLowerCase() === status.toLowerCase())
+                      .map((task, index) => (
+                        <Draggable key={task.id} draggableId={task.id.toString()} index={index}>
+                          {(provided) => (
+                            <Card
+                              ref={provided.innerRef}
+                              {...provided.draggableProps}
+                              {...provided.dragHandleProps}
+                              className={`mb-2 ${
+                                task.priority === '1'
+                                  ? 'priority-1'
+                                  : task.priority === '2'
+                                  ? 'priority-2'
+                                  : 'priority-3'
+                              }`}
+                            >
+                              <CardHeader>
+                
+                                <CardTitle className="text-sm font-medium flex justify-between items-center">
+                                  {task.title}
+                                  <Dialog>
+                                    <DialogTrigger asChild>
+                                      <Button variant="ghost" size="sm" onClick={() => setEditingTask(task)}>
+                                        <Edit className="h-4 w-4" />
+                                      </Button>
+                                    </DialogTrigger>
+                                    <DialogContent>
+                                      <form onSubmit={handleUpdateTask}>
+                                        <DialogHeader>
+                                          <DialogTitle>Edit Task</DialogTitle>
+                                          <DialogDescription>Make changes to your task here.</DialogDescription>
+                                        </DialogHeader>
+                                        <div className="grid gap-4 py-4">
+                                          <div className="grid grid-cols-4 items-center gap-4">
+                                            <Label htmlFor="edit-title" className="text-right">
+                                              Title
+                                            </Label>
+                                            <Input
+                                              id="edit-title"
+                                              value={editingTask?.title}
+                                              onChange={(e) => setEditingTask({ ...editingTask!, title: e.target.value })}
+                                              className="col-span-3"
+                                            />
+                                          </div>
+                                          <div className="grid grid-cols-4 items-center gap-4">
+                                            <Label htmlFor="edit-description" className="text-right">
+                                              Description
+                                            </Label>
+                                            <Textarea
+                                              id="edit-description"
+                                              value={editingTask?.description}
+                                              onChange={(e) => setEditingTask({ ...editingTask!, description: e.target.value })}
+                                              className="col-span-3"
+                                            />
+                                          </div>
+                                          <div className="grid grid-cols-4 items-center gap-4">
+                                            <Label htmlFor="edit-status" className="text-right">
+                                              Status
+                                            </Label>
+                                            <Select
+                                              value={editingTask?.status}
+                                              onValueChange={(value) => setEditingTask({ ...editingTask!, status: value })}
+                                            >
+                                              <SelectTrigger className="col-span-3">
+                                                <SelectValue placeholder="Select status" />
+                                              </SelectTrigger>
+                                              <SelectContent>
+                                                {statusColumns.map((status) => (
+                                                  <SelectItem key={status} value={status}>
+                                                    {status}
+                                                  </SelectItem>
+                                                ))}
+                                              </SelectContent>
+                                            </Select>
+                                          </div>
+                                          <div className="grid grid-cols-4 items-center gap-4">
+                                            <Label htmlFor="edit-priority" className="text-right">
+                                              Priority
+                                            </Label>
+                                            <Select
+                                              value={editingTask?.priority}
+                                              onValueChange={(value: 'low' | 'medium' | 'high') => setEditingTask({ ...editingTask!, priority: value })}
+                                            >
+                                              <SelectTrigger className="col-span-3">
+                                                <SelectValue placeholder="Select priority" />
+                                              </SelectTrigger>
+                                              <SelectContent>
+                                                <SelectItem value="3">Low</SelectItem>
+                                                <SelectItem value="2">Medium</SelectItem>
+                                                <SelectItem value="1">High</SelectItem>
+                                              </SelectContent>
+                                            </Select>
+                                          </div>
+                                          <div className="grid grid-cols-4 items-center gap-4">
+                                            <Label htmlFor="edit-due_date" className="text-right">
+                                              Due Date
+                                            </Label>
+                                            <Input
+                                              id="edit-due_date"
+                                              type="date"
+                                              value={editingTask?.due_date}
+                                              onChange={(e) => setEditingTask({ ...editingTask!, due_date: e.target.value })}
+                                              className="col-span-3"
+                                            />
+                                          </div>
+                                        </div>
+                                        <DialogFooter>
+                                          <Button type="submit">Save Changes</Button>
+                                        </DialogFooter>
+                                      </form>
+                                    </DialogContent>
+                                  </Dialog>
+                                </CardTitle>
+                              </CardHeader>
+                              <CardContent>
+                                <p className="text-xs text-gray-500 mb-2">
+                                  Due: {new Date(task.due_date).toLocaleDateString()}
+                                </p>
+                              </CardContent>
+                            </Card>
+                          )}
+                        </Draggable>
+                      ))}
+                    {provided.placeholder}
+                  </div>
+                )}
+              </Droppable>
+            ))}
+          </div>
+        </DragDropContext>
+      </div>
+
+      <div className="bg-white p-4 rounded-lg shadow">
+        <h2 className="text-xl font-semibold mb-4">Project Details</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <h3 className="text-lg font-medium mb-2">Description</h3>
+            <p className="text-gray-600">{project.description}</p>
+          </div>
         </div>
       </div>
-
-      <ProjectProgressChart projectId={parseInt(projectId as string)} />
-
-      <h2 className="text-2xl font-semibold mb-4 mt-8">Tasks</h2>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        {['todo', 'in progress', 'completed'].map((status) => (
-          <div key={status} className="bg-gray-100 p-4 rounded-lg">
-            <h3 className="text-lg font-medium mb-4 capitalize">{status}</h3>
-            {project.tasks
-              .filter((task) => task.status === status)
-              .map((task) => (
-                <Card key={task.id} className="mb-4">
-                  <CardHeader>
-                    <CardTitle className="flex justify-between items-center">
-                      {task.title}
-                      <div>
-                        <Button variant="ghost" size="sm" onClick={() => setEditingTask(task)}>
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => handleDeleteTask(task.id)}>
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </CardTitle>
-                    <CardDescription>Priority: {task.priority}</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <p>{task.description}</p>
-                    <p className="text-sm text-gray-500 mt-2">Due: {new Date(task.due_date).toLocaleDateString()}</p>
-                  </CardContent>
-                </Card>
-              ))}
-          </div>
-        ))}
-      </div>
-
-      <Dialog>
-        <DialogTrigger asChild>
-          <Button>
-            <Plus className="mr-2 h-4 w-4" /> Create New Task
-          </Button>
-        </DialogTrigger>
-        <DialogContent>
-          <form onSubmit={handleCreateTask}>
-            <DialogHeader>
-              <DialogTitle>Create New Task</DialogTitle>
-              <DialogDescription>Add a new task to your project.</DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="title" className="text-right">
-                  Title
-                </Label>
-                <Input
-                  id="title"
-                  value={newTask.title}
-                  onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
-                  className="col-span-3"
-                />
-              </div>
-              <div className="grid grid-cols-4  items-center gap-4">
-                <Label htmlFor="description" className="text-right">
-                  Description
-                </Label>
-                <Textarea
-                  id="description"
-                  value={newTask.description}
-                  onChange={(e) => setNewTask({ ...newTask, description: e.target.value })}
-                  className="col-span-3"
-                />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="status" className="text-right">
-                  Status
-                </Label>
-                <Select
-                  value={newTask.status}
-                  onValueChange={(value) => setNewTask({ ...newTask, status: value })}
-                >
-                  <SelectTrigger className="col-span-3">
-                    <SelectValue placeholder="Select status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="todo">Todo</SelectItem>
-                    <SelectItem value="in progress">In Progress</SelectItem>
-                    <SelectItem value="completed">Completed</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="priority" className="text-right">
-                  Priority
-                </Label>
-                <Input
-                  id="priority"
-                  type="number"
-                  value={newTask.priority}
-                  onChange={(e) => setNewTask({ ...newTask, priority: parseInt(e.target.value) })}
-                  className="col-span-3"
-                />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="due_date" className="text-right">
-                  Due Date
-                </Label>
-                <Input
-                  id="due_date"
-                  type="date"
-                  value={newTask.due_date}
-                  onChange={(e) => setNewTask({ ...newTask, due_date: e.target.value })}
-                  className="col-span-3"
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button type="submit">Create Task</Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={!!editingTask} onOpenChange={() => setEditingTask(null)}>
-        <DialogContent>
-          <form onSubmit={handleUpdateTask}>
-            <DialogHeader>
-              <DialogTitle>Edit Task</DialogTitle>
-              <DialogDescription>Make changes to your task here.</DialogDescription>
-            </DialogHeader>
-            {editingTask && (
-              <div className="grid gap-4 py-4">
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="edit-title" className="text-right">
-                    Title
-                  </Label>
-                  <Input
-                    id="edit-title"
-                    value={editingTask.title}
-                    onChange={(e) => setEditingTask({ ...editingTask, title: e.target.value })}
-                    className="col-span-3"
-                  />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="edit-description" className="text-right">
-                    Description
-                  </Label>
-                  <Textarea
-                    id="edit-description"
-                    value={editingTask.description}
-                    onChange={(e) => setEditingTask({ ...editingTask, description: e.target.value })}
-                    className="col-span-3"
-                  />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="edit-status" className="text-right">
-                    Status
-                  </Label>
-                  <Select
-                    value={editingTask.status}
-                    onValueChange={(value) => setEditingTask({ ...editingTask, status: value })}
-                  >
-                    <SelectTrigger className="col-span-3">
-                      <SelectValue placeholder="Select status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="todo">Todo</SelectItem>
-                      <SelectItem value="in progress">In Progress</SelectItem>
-                      <SelectItem value="completed">Completed</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="edit-priority" className="text-right">
-                    Priority
-                  </Label>
-                  <Input
-                    id="edit-priority"
-                    type="number"
-                    value={editingTask.priority}
-                    onChange={(e) => setEditingTask({ ...editingTask, priority: parseInt(e.target.value) })}
-                    className="col-span-3"
-                  />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="edit-due_date" className="text-right">
-                    Due Date
-                  </Label>
-                  <Input
-                    id="edit-due_date"
-                    type="date"
-                    value={editingTask.due_date}
-                    onChange={(e) => setEditingTask({ ...editingTask, due_date: e.target.value })}
-                    className="col-span-3"
-                  />
-                </div>
-              </div>
-            )}
-            <DialogFooter>
-              <Button type="submit">Save Changes</Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }
