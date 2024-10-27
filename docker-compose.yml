@@ -1,0 +1,15 @@
+services:
+  application:
+    build:
+      context: .
+      dockerfile: .deploy/Dockerfile
+    container_name: work-everywhere-ui
+    env_file:
+      - '.env.example'
+    ports:
+      - '127.0.0.1:3000:3000'
+
+
+networks:
+  default:
+    name: workeverywhere
