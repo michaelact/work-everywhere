@@ -10,11 +10,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Search, Plus, ChevronDown, Filter, SortAsc, Calendar, Users, Edit } from 'lucide-react'
+import { Search, Plus, ChevronDown, Edit } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis } from 'recharts'
 import { Pie, PieChart, Cell, Legend, Tooltip } from 'recharts'
-import { Area, AreaChart, CartesianGrid, Line, LineChart } from 'recharts'
+import { Area, AreaChart, CartesianGrid } from 'recharts'
 
 interface Task {
   id: number
@@ -70,8 +70,8 @@ export default function ProjectDashboard() {
   const { toast } = useToast()
 
   useEffect(() => {
-    fetchProject(),
-    fetchProjectStats()
+    fetchProject();
+    fetchProjectStats();
   }, [projectId])
 
   const fetchProject = async () => {

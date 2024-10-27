@@ -35,13 +35,18 @@ export default function LoginPage() {
       })
 
       if (response.ok) {
-        await response.json()
         router.push('/projects')
       } else {
         setError('Invalid email or password')
       }
     } catch (error) {
-      setError('An error occurred. Please try again.')
+      let errorMessage = "Failed to do something exceptional";
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+
+      console.log(errorMessage)
+      setError(`An error occurred. Please try again.`)
     }
   }
 
