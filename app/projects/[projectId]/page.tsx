@@ -7,13 +7,14 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Search, Plus, ChevronDown, Filter, SortAsc, Calendar, Users, Edit } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
+import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis } from 'recharts'
+import { Pie, PieChart, Cell, Legend, Tooltip } from 'recharts'
+import { Area, AreaChart, CartesianGrid, Line, LineChart } from 'recharts'
 
 interface Task {
   id: number
@@ -33,11 +34,29 @@ interface Project {
   members: { id: number; name: string; avatar: string }[]
 }
 
+interface ProjectSummary {
+  total_tasks: number
+  completed_tasks: number
+  incomplete_tasks: number
+  overdue_tasks: number
+}
+
+interface DailyCompletedTasks {
+  date: string
+  completed_count: number
+}
+
+interface ProjectStats {
+  summary: ProjectSummary
+  daily_completed_tasks: DailyCompletedTasks[]
+}
+
 const statusColumns = ['Todo', 'In Progress', 'Completed', 'Overdue']
 
 export default function ProjectDashboard() {
   const { projectId } = useParams()
   const [project, setProject] = useState<Project | null>(null)
+  const [projectStats, setProjectStats] = useState<ProjectStats | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [sortBy, setSortBy] = useState<'priority' | 'due_date'>('priority')
   const [newTask, setNewTask] = useState<Partial<Task>>({
@@ -51,7 +70,8 @@ export default function ProjectDashboard() {
   const { toast } = useToast()
 
   useEffect(() => {
-    fetchProject()
+    fetchProject(),
+    fetchProjectStats()
   }, [projectId])
 
   const fetchProject = async () => {
@@ -75,6 +95,32 @@ export default function ProjectDashboard() {
       toast({
         title: 'Error',
         description: 'An error occurred while fetching the project. Please try again.',
+        variant: 'destructive',
+      })
+    }
+  }
+
+  const fetchProjectStats = async () => {
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/projects/${projectId}/progress`, {
+        credentials: 'include',
+      })
+      if (response.ok) {
+        const data = await response.json()
+        setProjectStats(data)
+      } else {
+        console.error('Failed to fetch project stats')
+        toast({
+          title: 'Error',
+          description: 'Failed to fetch project statistics. Please try again.',
+          variant: 'destructive',
+        })
+      }
+    } catch (error) {
+      console.error('Error fetching project stats:', error)
+      toast({
+        title: 'Error',
+        description: 'An error occurred while fetching the project statistics. Please try again.',
         variant: 'destructive',
       })
     }
@@ -214,9 +260,21 @@ export default function ProjectDashboard() {
     }
   })
 
-  if (!project) {
+  if (!project || !projectStats) {
     return <div>Loading...</div>
   }
+
+  const taskStatusData = [
+    { name: 'Completed', value: projectStats.summary.completed_tasks },
+    { name: 'Incomplete', value: projectStats.summary.incomplete_tasks },
+  ]
+
+  const COLORS = [
+    'hsl(var(--primary))',
+    'hsl(var(--secondary))',
+    'hsl(var(--destructive))',
+    'hsl(var(--accent))'
+  ];  
 
   return (
     <div className="container mx-auto p-4">
@@ -243,6 +301,110 @@ export default function ProjectDashboard() {
           </div>
         </div>
       </header>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Completed tasks</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{projectStats.summary.completed_tasks}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Incomplete tasks</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{projectStats.summary.incomplete_tasks}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Overdue tasks</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{projectStats.summary.overdue_tasks}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total tasks</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{projectStats.summary.total_tasks}</div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+        <Card>
+          <CardHeader>
+            <CardTitle>Incomplete tasks by section</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={350}>
+              <BarChart data={statusColumns.slice(0, 2).map(status => ({
+                name: status,
+                total: filteredTasks.filter(task => task.status.toLowerCase() === status.toLowerCase() && task.status.toLowerCase() !== 'completed').length,
+              }))}>
+                <XAxis dataKey="name" />
+                <YAxis />
+                <Bar dataKey="total" fill="#8884d8" />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Total tasks by completion status</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={350}>
+              <PieChart>
+                <Pie
+                  data={taskStatusData}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  outerRadius={80}
+                  fill="#8884d8"
+                  dataKey="value"
+                >
+                  {taskStatusData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip />
+                <Legend />
+              </PieChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card className="mb-8">
+        <CardHeader>
+          <CardTitle>Task completion over time</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ResponsiveContainer width="100%" height={350}>
+            <AreaChart data={projectStats.daily_completed_tasks}>
+              <defs>
+                <linearGradient id="colorCompleted" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#8884d8" stopOpacity={0.8}/>
+                  <stop offset="95%" stopColor="#8884d8" stopOpacity={0}/>
+                </linearGradient>
+              </defs>
+              <XAxis dataKey="date" />
+              <YAxis />
+              <CartesianGrid strokeDasharray="3 3" />
+              <Tooltip />
+              <Area type="monotone" dataKey="completed_count" stroke="#8884d8" fillOpacity={1} fill="url(#colorCompleted)" />
+            </AreaChart>
+          </ResponsiveContainer>
+        </CardContent>
+      </Card>
 
       <div className="bg-white p-4 rounded-lg shadow mb-4">
         <div className="flex justify-between items-center mb-4">
@@ -457,7 +619,7 @@ export default function ProjectDashboard() {
                                             </Label>
                                             <Select
                                               value={editingTask?.priority}
-                                              onValueChange={(value: 'low' | 'medium' | 'high') => setEditingTask({ ...editingTask!, priority: value })}
+                                              onValueChange={(value: '3' | '2' | '1') => setEditingTask({ ...editingTask!, priority: value })}
                                             >
                                               <SelectTrigger className="col-span-3">
                                                 <SelectValue placeholder="Select priority" />
