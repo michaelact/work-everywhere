@@ -1,5 +1,8 @@
 # Working Everywhere
 
+> [!CAUTION]
+> Work Everywhere is not production-ready, only for a college assignment.
+
 ## Overview
 
 The **Working Everywhere** application is a Next.js-based project management dashboard. It helps teams organize tasks, monitor project progress, and search for specific projects.
