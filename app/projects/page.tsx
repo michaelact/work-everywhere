@@ -6,10 +6,10 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { useToast } from '@/hooks/use-toast'
+import { Trash2 } from 'lucide-react'
 
 interface Project {
   id: number
@@ -98,6 +98,36 @@ export default function ProjectList() {
     }
   }
 
+  const handleDeleteProject = async (projectId: number) => {
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/projects/${projectId}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      })
+      if (response.ok) {
+        setProjects(projects.filter(project => project.id !== projectId))
+        toast({
+          title: 'Success',
+          description: 'Project deleted successfully.',
+        })
+      } else {
+        console.error('Failed to delete project')
+        toast({
+          title: 'Error',
+          description: 'Failed to delete project. Please try again.',
+          variant: 'destructive',
+        })
+      }
+    } catch (error) {
+      console.error('Error deleting project:', error)
+      toast({
+        title: 'Error',
+        description: 'An error occurred while deleting the project. Please try again.',
+        variant: 'destructive',
+      })
+    }
+  }
+
   return (
     <div className="container mx-auto p-4">
       <h1 className="text-2xl font-bold mb-4">Projects</h1>
@@ -159,7 +189,17 @@ export default function ProjectList() {
         {projects.map((project) => (
           <Card key={project.id}>
             <CardHeader>
-              <CardTitle>{project.name}</CardTitle>
+              <div className="flex justify-between items-center">
+                <CardTitle>{project.name}</CardTitle>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => handleDeleteProject(project.id)}
+                  className="text-red-500 hover:text-red-700"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
               <CardDescription>Due: {new Date(project.due_date).toLocaleDateString()}</CardDescription>
             </CardHeader>
             <CardContent>

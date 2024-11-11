@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Search, Plus, ChevronDown, Edit, UserPlus, UserMinus } from 'lucide-react'
+import { Search, Plus, ChevronDown, Edit, UserPlus, UserMinus, Trash2 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis } from 'recharts'
 import { Pie, PieChart, Cell, Legend, Tooltip } from 'recharts'
@@ -251,6 +251,39 @@ export default function ProjectDashboard() {
       toast({
         title: 'Error',
         description: 'An error occurred while updating the task. Please try again.',
+        variant: 'destructive',
+      })
+    }
+  }
+
+  const handleDeleteTask = async (taskId: number) => {
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/tasks/${taskId}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      })
+      if (response.ok) {
+        setProject(prevProject => ({
+          ...prevProject!,
+          tasks: prevProject!.tasks.filter(task => task.id !== taskId)
+        }))
+        toast({
+          title: 'Success',
+          description: 'Task deleted successfully.',
+        })
+      } else {
+        console.error('Failed to delete task')
+        toast({
+          title: 'Error',
+          description: 'Failed to delete task. Please try again.',
+          variant: 'destructive',
+        })
+      }
+    } catch (error) {
+      console.error('Error deleting task:', error)
+      toast({
+        title: 'Error',
+        description: 'An error occurred while deleting the task. Please try again.',
         variant: 'destructive',
       })
     }
@@ -654,13 +687,21 @@ export default function ProjectDashboard() {
                               <CardHeader>
                                 <CardTitle className="text-sm font-medium flex justify-between items-center">
                                   {task.title}
-                                  <Link href={`/tasks/${task.id}`}>
-                                  </Link>
                                   <Dialog>
                                     <DialogTrigger asChild>
-                                      <Button variant="ghost" size="sm" onClick={() => setEditingTask(task)}>
-                                        <Edit className="h-4 w-4" />
-                                      </Button>
+                                      <div className="flex items-center space-x-2">
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          onClick={() => handleDeleteTask(task.id)}
+                                          className="text-red-500 hover:text-red-700"
+                                        >
+                                          <Trash2 className="h-4 w-4" />
+                                        </Button>
+                                        <Button variant="ghost" size="sm" onClick={() => setEditingTask(task)}>
+                                          <Edit className="h-4 w-4" />
+                                        </Button>
+                                      </div>
                                     </DialogTrigger>
                                     <DialogContent>
                                       <form onSubmit={handleUpdateTask}>
