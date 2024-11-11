@@ -14,14 +14,14 @@ import { Search, Plus, ChevronDown, Edit, UserPlus, UserMinus } from 'lucide-rea
 import { useToast } from '@/hooks/use-toast'
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis } from 'recharts'
 import { Pie, PieChart, Cell, Legend, Tooltip } from 'recharts'
-import { Area, AreaChart, CartesianGrid } from 'recharts'
+import Link from 'next/link'
 
 interface Task {
   id: number
   title: string
   description: string
   status: string
-  priority: '3' | '2' | '1'
+  priority: number
   due_date: string
   assigned_user_id: number | null
 }
@@ -58,7 +58,7 @@ interface ProjectStats {
   daily_completed_tasks: DailyCompletedTasks[]
 }
 
-const statusColumns = ['Todo', 'In Progress', 'Completed', 'Overdue']
+const statusColumns = ['Todo', 'In Progress', 'Completed']
 
 export default function ProjectDashboard() {
   const { projectId } = useParams()
@@ -70,7 +70,7 @@ export default function ProjectDashboard() {
     title: '',
     description: '',
     status: 'Todo',
-    priority: '1',
+    priority: 1,
     due_date: '',
     assigned_user_id: null,
   })
@@ -146,7 +146,7 @@ export default function ProjectDashboard() {
     setProject({ ...project, tasks: updatedTasks })
 
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/tasks/${draggableId}`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/projects/${projectId}/tasks/${draggableId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -176,21 +176,22 @@ export default function ProjectDashboard() {
   }
 
   const handleCreateTask = async (e: React.FormEvent) => {
+    e.preventDefault()
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/tasks`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/projects/${projectId}/tasks`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         credentials: 'include',
-        body: JSON.stringify({ ...newTask, project_id: projectId }),
+        body: JSON.stringify(newTask),
       })
       if (response.ok) {
         setNewTask({
           title: '',
           description: '',
           status: 'Todo',
-          priority: '1',
+          priority: 1,
           due_date: '',
           assigned_user_id: null,
         })
@@ -218,6 +219,7 @@ export default function ProjectDashboard() {
   }
 
   const handleUpdateTask = async (e: React.FormEvent) => {
+    e.preventDefault()
     if (!editingTask) return
 
     try {
@@ -552,7 +554,7 @@ export default function ProjectDashboard() {
                         </SelectTrigger>
                         <SelectContent>
                           {statusColumns.map((status) => (
-                            <SelectItem key={status} value={status}>
+                            <SelectItem key={status} value={status.toLowerCase().replace(' ', '_')}>
                               {status}
                             </SelectItem>
                           ))}
@@ -564,8 +566,8 @@ export default function ProjectDashboard() {
                         Priority
                       </Label>
                       <Select
-                        value={newTask.priority}
-                        onValueChange={(value: '3' | '2' | '1') => setNewTask({ ...newTask, priority: value })}
+                        value={newTask.priority?.toString() || '3'}
+                        onValueChange={(value) => setNewTask({ ...newTask, priority: parseInt(value) })}
                       >
                         <SelectTrigger className="col-span-3">
                           <SelectValue placeholder="Select priority" />
@@ -642,16 +644,18 @@ export default function ProjectDashboard() {
                               {...provided.draggableProps}
                               {...provided.dragHandleProps}
                               className={`mb-2 ${
-                                task.priority === '1'
-                                  ? 'priority-1'
-                                  : task.priority === '2'
-                                ? 'priority-2'
-                                  : 'priority-3'
+                                task.priority === 1
+                                  ? 'border-l-4 border-red-500'
+                                  : task.priority === 2
+                                  ? 'border-l-4 border-yellow-500'
+                                  : 'border-l-4 border-green-500'
                               }`}
                             >
                               <CardHeader>
                                 <CardTitle className="text-sm font-medium flex justify-between items-center">
                                   {task.title}
+                                  <Link href={`/tasks/${task.id}`}>
+                                  </Link>
                                   <Dialog>
                                     <DialogTrigger asChild>
                                       <Button variant="ghost" size="sm" onClick={() => setEditingTask(task)}>
@@ -712,8 +716,8 @@ export default function ProjectDashboard() {
                                               Priority
                                             </Label>
                                             <Select
-                                              value={editingTask?.priority}
-                                              onValueChange={(value: '3' | '2' | '1') => setEditingTask({ ...editingTask!, priority: value })}
+                                              value={editingTask?.priority?.toString() || '3'}
+                                              onValueChange={(value: '3' | '2' | '1') => setEditingTask({ ...editingTask!, priority: parseInt(value) })}
                                             >
                                               <SelectTrigger className="col-span-3">
                                                 <SelectValue placeholder="Select priority" />
@@ -798,7 +802,8 @@ export default function ProjectDashboard() {
             <div className="flex flex-wrap gap-2">
               {project.members.map((member) => (
                 <div key={member.id} className="flex items-center space-x-2">
-                  <img src={member.avatar} alt={member.name} className="w-8 h-8 rounded-full" />
+                  {/* <img src={member.avatar} alt={member.name} className="w-8 h-8 rounded-full" /> */}
+                  <img src="https://cdn.pixabay.com/photo/2020/07/01/12/58/icon-5359553_1280.png" alt={member.name} className="w-8 h-8 rounded-full" />
                   <span className="text-sm">{member.name}</span>
                   <Button variant="ghost" size="sm" onClick={() => handleRemoveMember(member.id)}>
                     <UserMinus className="h-4 w-4" />
