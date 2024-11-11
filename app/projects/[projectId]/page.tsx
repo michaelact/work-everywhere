@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Search, Plus, ChevronDown, Edit } from 'lucide-react'
+import { Search, Plus, ChevronDown, Edit, UserPlus, UserMinus } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis } from 'recharts'
 import { Pie, PieChart, Cell, Legend, Tooltip } from 'recharts'
@@ -23,6 +23,13 @@ interface Task {
   status: string
   priority: '3' | '2' | '1'
   due_date: string
+  assigned_user_id: number | null
+}
+
+interface User {
+  id: number
+  name: string
+  avatar: string
 }
 
 interface Project {
@@ -31,7 +38,7 @@ interface Project {
   description: string
   due_date: string
   tasks: Task[]
-  members: { id: number; name: string; avatar: string }[]
+  members: User[]
 }
 
 interface ProjectSummary {
@@ -65,13 +72,15 @@ export default function ProjectDashboard() {
     status: 'Todo',
     priority: '1',
     due_date: '',
+    assigned_user_id: null,
   })
   const [editingTask, setEditingTask] = useState<Task | null>(null)
+  const [newMemberId, setNewMemberId] = useState<string>('')
   const { toast } = useToast()
 
   useEffect(() => {
-    fetchProject();
-    fetchProjectStats();
+    fetchProject()
+    fetchProjectStats()
   }, [projectId])
 
   const fetchProject = async () => {
@@ -167,15 +176,14 @@ export default function ProjectDashboard() {
   }
 
   const handleCreateTask = async (e: React.FormEvent) => {
-    e.preventDefault()
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/projects/${projectId}/tasks`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/tasks`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         credentials: 'include',
-        body: JSON.stringify(newTask),
+        body: JSON.stringify({ ...newTask, project_id: projectId }),
       })
       if (response.ok) {
         setNewTask({
@@ -184,6 +192,7 @@ export default function ProjectDashboard() {
           status: 'Todo',
           priority: '1',
           due_date: '',
+          assigned_user_id: null,
         })
         fetchProject()
         toast({
@@ -209,7 +218,6 @@ export default function ProjectDashboard() {
   }
 
   const handleUpdateTask = async (e: React.FormEvent) => {
-    e.preventDefault()
     if (!editingTask) return
 
     try {
@@ -246,6 +254,89 @@ export default function ProjectDashboard() {
     }
   }
 
+  const handleAddMember = async () => {
+    if (!newMemberId) return
+
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/projects/${projectId}/members`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({ user_id: newMemberId }),
+      })
+      if (response.ok) {
+        setNewMemberId('')
+        fetchProject()
+        toast({
+          title: 'Success',
+          description: 'Member added successfully.',
+        })
+      } else {
+        console.error('Failed to add member')
+        toast({
+          title: 'Error',
+          description: 'Failed to add member. Please try again.',
+          variant: 'destructive',
+        })
+      }
+    } catch (error) {
+      console.error('Error adding member:', error)
+      toast({
+        title: 'Error',
+        description: 'An error occurred while adding the member. Please try again.',
+        variant: 'destructive',
+      })
+    }
+  }
+
+  const handleRemoveMember = async (userId: number) => {
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/projects/${projectId}/members`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({ user_id: userId }),
+      })
+
+      const responseData = await response.json()
+      
+      if (response.ok) {
+        fetchProject()
+        toast({
+          title: 'Success',
+          description: 'Member removed successfully.',
+        })
+      } else {
+        if (response.status >= 400 && response.status < 500) {
+          console.error(responseData.message)
+          toast({
+            title: 'Error',
+            description: responseData.message,
+            variant: 'destructive',
+          })
+        } else {
+          console.error('Failed to remove member')
+          toast({
+            title: 'Error',
+            description: 'Failed to remove member. Please try again.',
+            variant: 'destructive',
+          })
+        }
+      }
+    } catch (error) {
+      console.error('Error removing member:', error)
+      toast({
+        title: 'Error',
+        description: 'An error occurred while removing the member. Please try again.',
+        variant: 'destructive',
+      })
+    }
+  }
+
   const filteredTasks = project?.tasks.filter(task =>
     task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
     task.description.toLowerCase().includes(searchQuery.toLowerCase())
@@ -274,10 +365,11 @@ export default function ProjectDashboard() {
     'hsl(var(--secondary))',
     'hsl(var(--destructive))',
     'hsl(var(--accent))'
-  ];  
+  ]
 
   return (
     <div className="container mx-auto p-4">
+      {/* Header */}
       <header className="bg-orange-500 text-white p-4 rounded-t-lg mb-4">
         <div className="flex justify-between items-center">
           <div>
@@ -302,6 +394,7 @@ export default function ProjectDashboard() {
         </div>
       </header>
 
+      {/* Project Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -337,6 +430,7 @@ export default function ProjectDashboard() {
         </Card>
       </div>
 
+      {/* Charts */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
         <Card>
           <CardHeader>
@@ -383,30 +477,9 @@ export default function ProjectDashboard() {
         </Card>
       </div>
 
-      <Card className="mb-8">
-        <CardHeader>
-          <CardTitle>Task completion over time</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ResponsiveContainer width="100%" height={350}>
-            <AreaChart data={projectStats.daily_completed_tasks}>
-              <defs>
-                <linearGradient id="colorCompleted" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#8884d8" stopOpacity={0.8}/>
-                  <stop offset="95%" stopColor="#8884d8" stopOpacity={0}/>
-                </linearGradient>
-              </defs>
-              <XAxis dataKey="date" />
-              <YAxis />
-              <CartesianGrid strokeDasharray="3 3" />
-              <Tooltip />
-              <Area type="monotone" dataKey="completed_count" stroke="#8884d8" fillOpacity={1} fill="url(#colorCompleted)" />
-            </AreaChart>
-          </ResponsiveContainer>
-        </CardContent>
-      </Card>
-
+      {/* Task Management Section */}
       <div className="bg-white p-4 rounded-lg shadow mb-4">
+        {/* Task Search and Sort */}
         <div className="flex justify-between items-center mb-4">
           <div className="flex items-center space-x-2">
             <Input
@@ -516,6 +589,27 @@ export default function ProjectDashboard() {
                         className="col-span-3"
                       />
                     </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="assigned_user" className="text-right">
+                        Assign To
+                      </Label>
+                      <Select
+                        value={newTask.assigned_user_id?.toString() || ''}
+                        onValueChange={(value) => setNewTask({ ...newTask, assigned_user_id: value ? parseInt(value) : null })}
+                      >
+                        <SelectTrigger className="col-span-3">
+                          <SelectValue placeholder="Select user" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Unassigned">Unassigned</SelectItem>
+                          {project.members.map((user) => (
+                            <SelectItem key={user.id} value={user.id.toString()}>
+                              {user.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                   <DialogFooter>
                     <Button type="submit">Create Task</Button>
@@ -526,6 +620,7 @@ export default function ProjectDashboard() {
           </div>
         </div>
 
+        {/* Task List */}
         <DragDropContext onDragEnd={onDragEnd}>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {statusColumns.map((status) => (
@@ -550,12 +645,11 @@ export default function ProjectDashboard() {
                                 task.priority === '1'
                                   ? 'priority-1'
                                   : task.priority === '2'
-                                  ? 'priority-2'
+                                ? 'priority-2'
                                   : 'priority-3'
                               }`}
                             >
                               <CardHeader>
-                
                                 <CardTitle className="text-sm font-medium flex justify-between items-center">
                                   {task.title}
                                   <Dialog>
@@ -643,6 +737,27 @@ export default function ProjectDashboard() {
                                               className="col-span-3"
                                             />
                                           </div>
+                                          <div className="grid grid-cols-4 items-center gap-4">
+                                            <Label htmlFor="edit-assigned_user" className="text-right">
+                                              Assign To
+                                            </Label>
+                                            <Select
+                                              value={editingTask?.assigned_user_id?.toString() || ''}
+                                              onValueChange={(value) => setEditingTask({ ...editingTask!, assigned_user_id: value ? parseInt(value) : null })}
+                                            >
+                                              <SelectTrigger className="col-span-3">
+                                                <SelectValue placeholder="Select user" />
+                                              </SelectTrigger>
+                                              <SelectContent>
+                                                <SelectItem value="Unassigned">Unassigned</SelectItem>
+                                                {project.members.map((user) => (
+                                                  <SelectItem key={user.id} value={user.id.toString()}>
+                                                    {user.name}
+                                                  </SelectItem>
+                                                ))}
+                                              </SelectContent>
+                                            </Select>
+                                          </div>
                                         </div>
                                         <DialogFooter>
                                           <Button type="submit">Save Changes</Button>
@@ -670,12 +785,43 @@ export default function ProjectDashboard() {
         </DragDropContext>
       </div>
 
+      {/* Project Details */}
       <div className="bg-white p-4 rounded-lg shadow">
         <h2 className="text-xl font-semibold mb-4">Project Details</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <h3 className="text-lg font-medium mb-2">Description</h3>
             <p className="text-gray-600">{project.description}</p>
+          </div>
+          <div>
+            <h3 className="text-lg font-medium mb-2">Team Members</h3>
+            <div className="flex flex-wrap gap-2">
+              {project.members.map((member) => (
+                <div key={member.id} className="flex items-center space-x-2">
+                  <img src={member.avatar} alt={member.name} className="w-8 h-8 rounded-full" />
+                  <span className="text-sm">{member.name}</span>
+                  <Button variant="ghost" size="sm" onClick={() => handleRemoveMember(member.id)}>
+                    <UserMinus className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+            <div className="mt-4">
+              <h4 className="text-md font-medium mb-2">Add New Member</h4>
+              <div className="flex items-center space-x-2">
+                <Input
+                  type="text"
+                  placeholder="Enter user ID"
+                  value={newMemberId}
+                  onChange={(e) => setNewMemberId(e.target.value)}
+                  className="w-48"
+                />
+                <Button onClick={handleAddMember}>
+                  <UserPlus className="h-4 w-4 mr-2" />
+                  Add
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
